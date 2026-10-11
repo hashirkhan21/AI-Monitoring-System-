@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vital Guardian — AI-Powered ICU Monitoring System</title>
+<script>
+    if (!localStorage.getItem('vg_token')) {
+        window.location.href = '/static/login.html';
+    }
+</script>
+<link rel="stylesheet" href="vg-ui.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══════════ NAVBAR ═══════════ -->
+<div id="navbar">
+
+  <div class="logo-area">
+    <div class="pdot"></div>
+    <div class="logo-txt">
+      <span class="logo-brand">VITAL GUARDIAN</span>
+      <span class="logo-sub">AI-Powered ICU Monitoring System</span>
+    </div>
+  </div>
+
+  <div class="nav-stats">
+    <div class="nst">
+      <span class="nst-lbl">PATIENTS</span>
+      <span class="nst-val" id="pat-count">3</span>
+    </div>
+    <div class="nsep"></div>
+    <div class="nst">
+      <span class="nst-lbl">ALERTS TODAY</span>
+      <span class="nst-val" id="alert-today">0</span>
+    </div>
+    <div class="nsep"></div>
+    <div class="nst">
+      <span class="nst-lbl">AI MODEL</span>
+      <span class="nst-val gold">MoViNet-A2</span>
+    </div>
+  </div>
+
+  <div class="nav-right">
+    <!-- Nurse Nameplate & Logout -->
+    <div style="display: flex; align-items: center; gap: 8px; margin-right: 15px; border-right: 1px solid rgba(255,255,255,0.08); padding-right: 15px;">
+        <span id="nurse-badge" style="font-size:0.75rem; color:#dca54c; font-weight:700; display:flex; align-items:center; gap:7px;">
+            <span id="idx-nav-av" style="width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:800;color:#fff;flex-shrink:0;"></span>
+            <span id="nurse-name-display">Loading...</span>
+        </span>
+        <a href="/static/admin.html" id="admin-hub-btn" style="background: rgba(220,165,76,0.1); color: #dca54c; text-decoration: none; border: 1px solid rgba(220,165,76,0.3); padding: 4px 10px; border-radius: 5px; font-size: 0.7rem; font-weight: 700; cursor: pointer; transition: all 0.2s; margin-left: 5px;" onmouseover="this.style.background='rgba(220,165,76,0.2)'" onmouseout="this.style.background='rgba(220,165,76,0.1)'">⚙️ Admin</a>
+        <button onclick="logoutNurse()" style="background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.2); padding: 4px 10px; border-radius: 5px; font-size: 0.7rem; font-weight: 700; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.2)'" onmouseout="this.style.background='rgba(239,68,68,0.1)'">Logout</button>
+    </div>
+
+    <!-- #20 — Nav clock -->
+    <div class="nav-clock" id="nav-clock">--:--:--</div>
+    <!-- #21 — Frame counter -->
+    <div class="nav-frames">🎞 <span id="frame-count">0</span> frames</div>
+    
+    <!-- AUDIO INDICATOR -->
+    <div class="nav-frames" style="color:#dca54c; border-color:rgba(220,165,76,0.3); background:rgba(220,165,76,0.1)">
+      🎙 <span id="mic-status">Audio Monitor: LIVE</span>
+    </div>
+
+    <a href="/static/hub.html" class="btn-ui" style="text-decoration:none; display:flex; align-items:center; background: rgba(56,189,248,0.1); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3);" onmouseover="this.style.background='rgba(56,189,248,0.2)'" onmouseout="this.style.background='rgba(56,189,248,0.1)'">🔙 Hub</a>
+    <div class="fps-wrap">
+      <span id="fps-txt" class="fps-r">0 FPS</span>
+    </div>
+    <button id="snd-toggle" class="snd-pill" onclick="VGAudio.toggle()">🔊 Sound</button>
+    <div class="live-pill"><span class="lb"></span>LIVE PROCESSING</div>
+  </div>
+
+</div>
+
+<!-- ═══════════ MAIN DASHBOARD ═══════════ -->
+<div id="dash">
+
+  <!-- ── VIDEO SECTION ── -->
+  <div id="vid-section">
+
+    <div id="vid-box">
+      <img id="vstream" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="ICU camera feed">
+
+      <!-- ── Alert Banner ── -->
+      <div id="alert-banner">
+        <div class="ab-strobe"></div>
+        <div class="ab-icon">⚠</div>
+        <div class="ab-body">
+          <div id="ab-type" class="ab-type">⚠ ALERT DETECTED</div>
+          <div class="ab-meta">
+            <span id="ab-room">Room —</span>
+            &nbsp;·&nbsp;
+            <span id="ab-name">—</span>
+            &nbsp;·&nbsp; Confidence&nbsp;<span id="ab-conf">—</span>
+          </div>
+        </div>
+        <button class="ab-ack" onclick="ackAlert()">Acknowledge&nbsp;&nbsp;<kbd>Space</kbd></button>
+      </div>
+
+      <!-- ── Tactical HUD Overlay ── -->
+      <div id="vid-hud">
+        <div class="hud-tl"></div>
+        <div class="hud-tr"></div>
+        <div class="hud-bl"></div>
+        <div class="hud-br"></div>
+        <div class="hud-center">
+          <div class="hud-bracket"></div>
+        </div>
+        <div class="hud-scan"></div>
+        <div class="hud-label" id="hud-label">TARGET: PATIENT_A · CONF 0% · MoViNet-A2</div>
+      </div>
+
+      <!-- Corner labels -->
+      <div class="vcorn tl">
+        <span>📷</span>
+        <span id="cam-lbl">ICU CAM 01</span>
+      </div>
+      <div class="vcorn tr" id="ts-lbl">--:--:--</div>
+      <div class="vcorn bl" id="ai-lbl" style="display:none;">
+        <span class="adot"></span>
+        <span>AI ANALYZING</span>
+      </div>
+
+      <!-- #17 — Patient nameplate -->
+      <div id="pat-nameplate">
+        <span class="pnp-label">NOW MONITORING</span>
+        <span class="pnp-name" id="pnp-name">—</span>
+        <span class="pnp-room" id="pnp-room">—</span>
+      </div>
+
+      <!-- #review hold overlay -->
+      <div id="review-overlay">
+        <div class="rv-icon" id="rv-icon">✦</div>
+        <div class="rv-title" id="rv-title">✓ COGNITIVE CORE VERIFIED</div>
+        <div class="rv-sub">Review the AI analysis before proceeding</div>
+        <div class="rv-bar-wrap" id="rv-bar-wrap"><div class="rv-bar" id="rv-bar" style="width:100%"></div></div>
+        <div class="rv-count" id="rv-count-wrap">Proceeding in <span id="rv-count">10</span>s</div>
+        <button id="rv-next-btn" class="rv-next-btn" onclick="onClickNext()" style="display:none">▶ Next Patient</button>
+        <div class="rv-hint" id="rv-hint">Navigating to next patient segment</div>
+      </div>
+
+      <!-- Transition overlay -->
+      <div id="trn-overlay" class="hide">
+        <div class="spin"></div>
+        <h2 id="trn-txt">Switching Camera…</h2>
+        <p id="trn-sub">Preparing next patient segment</p>
+      </div>
+
+      <!-- #16 — Session stats overlay -->
+      <div id="stats-overlay">
+        <div class="stats-box">
+          <div class="stats-title">✓ Monitoring Session Complete</div>
+          <div class="stats-sub">All patient segments processed</div>
+          <div class="stats-grid">
+            <div class="stat-item">
+              <div class="stat-num amber" id="stat-detected">0</div>
+              <div class="stat-lbl">DETECTED</div>
+            </div>
+            <div class="stat-sep"></div>
+            <div class="stat-item">
+              <div class="stat-num green" id="stat-confirmed">0</div>
+              <div class="stat-lbl">CONFIRMED</div>
+            </div>
+            <div class="stat-sep"></div>
+            <div class="stat-item">
+              <div class="stat-num red" id="stat-suppressed">0</div>
+              <div class="stat-lbl">SUPPRESSED</div>
+            </div>
+          </div>
+          <div class="stats-time" id="stat-time"></div>
+        </div>
+      </div>
+
+      <!-- Pause dialog -->
+      <div id="ctrl-overlay" class="hide">
+        <div class="ctrl-box">
+          <div class="ctrl-ico">🤖</div>
+          <h3>Cognitive Core Verifying…</h3>
+          <p>Gemini 3.1 Flash is performing clinical cross-validation of this incident.</p>
+          <div class="btn-row">
+            <button class="btn-ui btn-primary" onclick="onResume()">▶ Resume</button>
+            <button class="btn-ui" onclick="onSkip()">⏭ Skip</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Segment bar -->
+    <div id="seg-bar">
+      <div class="seg-l">
+        <span class="seg-badge" id="seg-prog">[1/7]</span>
+        <span class="seg-title" id="seg-title">Initializing stream…</span>
+      </div>
+      <span class="seg-pill" id="seg-pill">NORMAL</span>
+    </div>
+
+    <!-- ── Audio Demo Bar — shown only for whooping-cough / asthma patients ── -->
+    <div id="audio-bar" style="display:none;">
+      <span class="audio-bar-icon">🎙</span>
+      <span class="audio-bar-label" id="audio-bar-label">AUDIO DEMO — RESPIRATORY MONITORING</span>
+      <audio id="clip-audio" preload="auto" controls></audio>
+    </div>
+
+  </div><!-- end vid-section -->
+
+  <!-- ── SIDEBAR ── -->
+  <div id="sidebar">
+
+    <!-- Patient Card -->
+    <div id="pat-card">
+      <div class="ph">
+        <div class="p-avatar av-normal" id="p-av">A</div>
+        <div class="p-info">
+          <div class="p-name" id="p-name">Patient ID: PT-10472</div>
+          <div class="p-room" id="p-room">Room 304 · Bed 2</div>
+        </div>
+        <div class="p-badge" id="p-badge">
+          <span class="bdot"></span>
+          <span id="p-status">MONITORING</span>
+        </div>
+      </div>
+      <!-- Vitals -->
+      <div class="vitals">
+        <div class="vbox">
+          <span class="vi hb" id="vi-hr">♥</span>
+          <span class="vv hr" id="v-hr">72</span>
+          <span class="vu">bpm</span>
+          <span class="vl">HEART RATE</span>
+        </div>
+        <div class="vbox">
+          <span class="vi">💧</span>
+          <span class="vv" id="v-spo2">97</span>
+          <span class="vu">%</span>
+          <span class="vl">SpO₂</span>
+        </div>
+        <div class="vbox">
+          <span class="vi">🩺</span>
+          <span class="vv" id="v-bp">120/80</span>
+          <span class="vu">mmHg</span>
+          <span class="vl">BLOOD PRESS.</span>
+        </div>
+        <div class="vbox">
+          <span class="vi">🌡</span>
+          <span class="vv" id="v-temp">36.8</span>
+          <span class="vu">°C</span>
+          <span class="vl">TEMPERATURE</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gauges -->
+    <div id="gauges">
+      <!-- Fall gauge -->
+      <div class="g-card">
+        <span class="g-lbl">FALL RISK</span>
+        <div class="g-wrap">
+          <svg class="g-svg" viewBox="0 0 100 100">
+            <!-- Color-band arcs (behind track) -->
+            <circle class="g-band gb" cx="50" cy="50" r="38"/>
+            <circle class="g-band ga" cx="50" cy="50" r="38"/>
+            <circle class="g-band gr" cx="50" cy="50" r="38"/>
+            <!-- Track -->
+            <circle class="g-track" cx="50" cy="50" r="38"/>
+            <!-- Active arc -->
+            <circle class="g-arc fa" id="fall-arc" cx="50" cy="50" r="38"
+                    stroke-dasharray="238.76" stroke-dashoffset="238.76"/>
+            <!-- 12 radial tick marks -->
+            <g class="g-ticks">
+              <line x1="94.0" y1="50.0" x2="98.0" y2="50.0"/>
+              <line x1="88.1" y1="72.0" x2="91.6" y2="74.0"/>
+              <line x1="72.0" y1="88.1" x2="74.0" y2="91.6"/>
+              <line x1="50.0" y1="94.0" x2="50.0" y2="98.0"/>
+              <line x1="28.0" y1="88.1" x2="26.0" y2="91.6"/>
+              <line x1="11.9" y1="72.0" x2="8.4"  y2="74.0"/>
+              <line x1="6.0"  y1="50.0" x2="2.0"  y2="50.0"/>
+              <line x1="11.9" y1="28.0" x2="8.4"  y2="26.0"/>
+              <line x1="28.0" y1="11.9" x2="26.0" y2="8.4"/>
+              <line x1="50.0" y1="6.0"  x2="50.0" y2="2.0"/>
+              <line x1="72.0" y1="11.9" x2="74.0" y2="8.4"/>
+              <line x1="88.1" y1="28.0" x2="91.6" y2="26.0"/>
+            </g>
+          </svg>
+          <div class="g-center">
+            <span class="g-pct" id="fall-pct">0%</span>
+            <span class="g-sub">FALL</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Seizure gauge -->
+      <div class="g-card">
+        <span class="g-lbl">SEIZURE RISK</span>
+        <div class="g-wrap">
+          <svg class="g-svg" viewBox="0 0 100 100">
+            <!-- Color-band arcs (behind track) -->
+            <circle class="g-band gb" cx="50" cy="50" r="38"/>
+            <circle class="g-band ga" cx="50" cy="50" r="38"/>
+            <circle class="g-band gr" cx="50" cy="50" r="38"/>
+            <!-- Track -->
+            <circle class="g-track" cx="50" cy="50" r="38"/>
+            <!-- Active arc -->
+            <circle class="g-arc sa" id="sz-arc" cx="50" cy="50" r="38"
+                    stroke-dasharray="238.76" stroke-dashoffset="238.76"/>
+            <!-- 12 radial tick marks -->
+            <g class="g-ticks">
+              <line x1="94.0" y1="50.0" x2="98.0" y2="50.0"/>
+              <line x1="88.1" y1="72.0" x2="91.6" y2="74.0"/>
+              <line x1="72.0" y1="88.1" x2="74.0" y2="91.6"/>
+              <line x1="50.0" y1="94.0" x2="50.0" y2="98.0"/>
+              <line x1="28.0" y1="88.1" x2="26.0" y2="91.6"/>
+              <line x1="11.9" y1="72.0" x2="8.4"  y2="74.0"/>
+              <line x1="6.0"  y1="50.0" x2="2.0"  y2="50.0"/>
+              <line x1="11.9" y1="28.0" x2="8.4"  y2="26.0"/>
+              <line x1="28.0" y1="11.9" x2="26.0" y2="8.4"/>
+              <line x1="50.0" y1="6.0"  x2="50.0" y2="2.0"/>
+              <line x1="72.0" y1="11.9" x2="74.0" y2="8.4"/>
+              <line x1="88.1" y1="28.0" x2="91.6" y2="26.0"/>
+            </g>
+          </svg>
+          <div class="g-center">
+            <span class="g-pct" id="sz-pct">0%</span>
+            <span class="g-sub">SEIZURE</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gemini Decision Card -->
+    <div id="gem-card">
+      <div class="gem-hdr">
+        <div class="gem-logo">
+          <span class="gem-star">✦</span>
+          <span class="gem-name">COGNITIVE CORE</span>
+        </div>
+        <div class="gem-hdr-right">
+          <span id="gem-time"></span>
+          <span class="gem-tag">Gemini 3.1 Flash</span>
+        </div>
+      </div>
+
+      <!-- Idle state -->
+      <div class="gp" id="g-idle">
+        <div class="g-idle">Awaiting incident for AI verification…</div>
+      </div>
+
+      <!-- Thinking state -->
+      <div class="gp hide" id="g-think">
+        <div class="g-think">
+          <div class="tdots">
+            <div class="td"></div>
+            <div class="td"></div>
+            <div class="td"></div>
+          </div>
+          <div class="g-think-txt">Cross-validating clinical signals…</div>
+        </div>
+      </div>
+
+      <!-- Result state -->
+      <div class="gp hide" id="g-result">
+        <div class="gv" id="g-verdict">—</div>
+        <div class="g-hl"  id="g-hl">—</div>
+        <div class="g-txt" id="g-txt">—</div>
+        <div class="g-sev">
+          <span class="sl">Severity:</span>
+          <span class="sv" id="g-sev">—</span>
+        </div>
+        <ul class="g-acts" id="g-acts"></ul>
+      </div>
+    </div>
+
+    <!-- Alert Log -->
+    <div id="alert-log">
+      <div class="log-hdr">
+        <span class="log-title">INCIDENT LOG</span>
+        <span id="alert-count">0 alerts</span>
+      </div>
+      <div id="log-feed">
+        <div class="log-empty" id="log-empty">
+          <span class="ei">🛡</span>
+          <span>No incidents detected.</span>
+          <span class="es">System monitoring all patients.</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end sidebar -->
+
+</div><!-- end dash -->
+
+
+<!-- ── Full-screen flash overlay (pointer-events:none) ── -->
+<div id="vg-flash"></div>
+
+<!-- ═══════════ JAVASCRIPT ═══════════ -->
+<script src="vg-ui.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
